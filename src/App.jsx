@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Sprout,
   ShoppingBag,
-  Truck,
   CheckCircle2,
-  Clock,
   MapPin,
   Tag,
   ShieldCheck,
@@ -12,17 +10,11 @@ import {
   Lock,
   PlusCircle,
   Search,
-  Filter,
   X,
-  Edit3,
   Trash2,
   Phone,
-  Building,
   RefreshCw,
-  Info,
   Calendar,
-  CreditCard,
-  QrCode,
   Globe,
   LogOut,
   LogIn,
@@ -322,7 +314,6 @@ export default function App() {
   const [transparentProduct, setTransparentProduct] = useState(null); 
   const [productToDelete, setProductToDelete] = useState(null); 
   const [productToRestock, setProductToRestock] = useState(null); 
-  const [productToEdit, setProductToEdit] = useState(null); 
   const [isAddListingOpen, setIsAddListingOpen] = useState(false); 
   const [toast, setToast] = useState(null);
 
@@ -330,7 +321,6 @@ export default function App() {
   const [preferredQuantities, setPreferredQuantities] = useState({});
 
   // Checkout Form State
-  const [checkoutStep, setCheckoutStep] = useState('cart'); 
   const [shippingForm, setShippingForm] = useState({
     address: '',
     pincode: '',
@@ -589,7 +579,6 @@ export default function App() {
     setOrders([...newOrders, ...orders]);
     setCart([]);
     setIsCartOpen(false);
-    setCheckoutStep('cart');
     showToast(`Order placed successfully! Deal locked privately between buyer and farmer.`);
     setActiveTab('orders');
   };
@@ -661,7 +650,7 @@ export default function App() {
           </div>
 
           {/* Auth Card */}
-          <div className="bg-white rounded-[2rem] w-full p-8 shadow-2xl border border-slate-100 space-y-6">
+          <div className="bg-white rounded-4xl w-full p-8 shadow-2xl border border-slate-100 space-y-6">
             <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl">
               <button
                 onClick={() => setAuthTab('signup')}
@@ -852,7 +841,7 @@ export default function App() {
       </header>
 
       {/* MAIN NAVIGATION BAR */}
-      <nav className="bg-white border-b border-slate-200 sticky top-[69px] z-30 shadow-sm">
+      <nav className="bg-white border-b border-slate-200 sticky top-17.25 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex space-x-2 sm:space-x-8 overflow-x-auto hide-scrollbar">
           <button
             onClick={() => setActiveTab('marketplace')}
@@ -1108,7 +1097,7 @@ export default function App() {
         {/* TAB 2: FARMER HUB */}
         {activeTab === 'farmer-hub' && (
           <div className="space-y-6">
-            <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-6 rounded-3xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-linear-to-r from-emerald-900 to-teal-900 text-white p-6 rounded-3xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
               <div>
                 <span className="bg-emerald-500/30 text-emerald-300 text-xs px-3 py-1 rounded-full font-bold border border-emerald-400/30 uppercase tracking-wider">
                   Farmer Direct Portal
