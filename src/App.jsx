@@ -11,10 +11,13 @@ import {
   PlusCircle,
   Search,
   X,
+  Edit3,
   Trash2,
   Phone,
   RefreshCw,
+  Info,
   Calendar,
+  QrCode,
   Globe,
   LogOut,
   LogIn,
@@ -293,7 +296,9 @@ export default function App() {
     village: '',
     pincode: '',
     upiId: '',
-    kycVerified: false
+    kycVerified: false,
+    avatar: '',
+    bio: ''
   });
 
   // App Collections
@@ -348,6 +353,12 @@ export default function App() {
     isSameHarvestDate: true
   });
 
+  // Profile Edit State
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState({});
+  const profileFileInputRef = useRef(null);
+  const signupFileInputRef = useRef(null);
+
   const fileInputRef = useRef(null);
   const t = TRANSLATIONS[lang];
 
@@ -376,6 +387,44 @@ export default function App() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleSignupImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) return showToast('Image size exceeds 5MB limit.');
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAuthForm(prev => ({ ...prev, avatar: reader.result }));
+        showToast('Profile photo attached!');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) return showToast('Image size exceeds 5MB limit.');
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditProfileForm(prev => ({ ...prev, avatar: reader.result }));
+        showToast('Profile photo updated!');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileUpdate = (e) => {
+    e.preventDefault();
+    setCurrentUser({ ...currentUser, ...editProfileForm });
+    setIsEditingProfile(false);
+    showToast('Profile updated successfully!');
+  };
+
+  const startEditingProfile = () => {
+    setEditProfileForm(currentUser);
+    setIsEditingProfile(true);
   };
 
   const handleAuthSubmit = (e) => {
@@ -412,8 +461,9 @@ export default function App() {
         phone: authForm.phone,
         upiId: authForm.upiId || `${authForm.name.toLowerCase().replace(/\s+/g, '')}@upi`,
         kycVerified: authForm.kycVerified,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-        deliveryAddress: ''
+        avatar: authForm.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+        farmStory: authForm.role === 'farmer' ? authForm.bio : '',
+        deliveryAddress: authForm.role === 'consumer' ? authForm.bio : ''
       };
       SEED_USERS.push(newUser);
       setCurrentUser(newUser);
@@ -703,6 +753,31 @@ export default function App() {
 
               {authTab === 'signup' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  
+                  {}
+                  <div className="flex flex-col items-center justify-center mb-4">
+                    <div 
+                      onClick={() => signupFileInputRef.current && signupFileInputRef.current.click()}
+                      className="w-20 h-20 rounded-full border-2 border-dashed border-emerald-400 bg-emerald-50 flex items-center justify-center cursor-pointer overflow-hidden relative group shadow-sm transition-all hover:border-emerald-500"
+                    >
+                      <input
+                        type="file"
+                        ref={signupFileInputRef}
+                        onChange={handleSignupImageUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      {authForm.avatar ? (
+                        <img src={authForm.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-8 h-8 text-emerald-300" />
+                      )}
+                      <div className="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center text-[10px] text-white font-bold text-center leading-tight">
+                        Upload<br/>Photo
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block font-bold text-slate-700 mb-1.5">I am joining as a...</label>
                     <select
@@ -727,6 +802,17 @@ export default function App() {
                         className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                       />
                     </div>
+                  </div>
+
+                  {}
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">{authForm.role === 'farmer' ? 'Farm Details & Bio' : 'Delivery Address'}</label>
+                    <textarea
+                      placeholder={authForm.role === 'farmer' ? "Tell buyers about your farming methods..." : "Full street address for deliveries..."}
+                      value={authForm.bio}
+                      onChange={(e) => setAuthForm({ ...authForm, bio: e.target.value })}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none h-20 resize-none"
+                    />
                   </div>
 
                   {authForm.role === 'farmer' && (
@@ -1291,39 +1377,142 @@ export default function App() {
 
         {/* TAB 5: PROFILE */}
         {activeTab === 'profile' && (
-          <div className="max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-            <div className="flex items-center gap-4 border-b border-slate-200 pb-5">
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-16 h-16 rounded-full object-cover ring-4 ring-emerald-500" />
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                  {currentUser.name}
-                  {currentUser.kycVerified && (
-                    <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Verified
-                    </span>
-                  )}
-                </h2>
-                <p className="text-xs text-slate-500 uppercase font-bold mt-0.5">{currentUser.role}</p>
-              </div>
+          <div className="max-w-3xl mx-auto space-y-6">
+            
+            {}
+            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm transition-all">
+              {isEditingProfile ? (
+                <form onSubmit={handleProfileUpdate} className="space-y-5 animate-in fade-in">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+                    <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                      <Edit3 className="w-5 h-5 text-emerald-600" /> Edit Profile
+                    </h2>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setIsEditingProfile(false)} className="px-4 py-2 text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">Cancel</button>
+                      <button type="submit" className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-colors">Save Changes</button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-6 items-start">
+                    <div className="shrink-0 flex flex-col items-center gap-2">
+                      <div 
+                        onClick={() => profileFileInputRef.current && profileFileInputRef.current.click()}
+                        className="w-24 h-24 rounded-full border-4 border-emerald-100 relative group cursor-pointer overflow-hidden bg-slate-50"
+                      >
+                        <input type="file" ref={profileFileInputRef} onChange={handleProfileImageUpload} accept="image/*" className="hidden" />
+                        <img src={editProfileForm.avatar} alt="Preview" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center text-xs font-bold text-white transition-all">
+                          Change
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium">Click to upload</span>
+                    </div>
+
+                    <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Full Name</label>
+                        <input type="text" required value={editProfileForm.name || ''} onChange={e => setEditProfileForm({...editProfileForm, name: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Mobile Number</label>
+                        <input type="text" required value={editProfileForm.phone || ''} onChange={e => setEditProfileForm({...editProfileForm, phone: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Village / Location</label>
+                        <input type="text" value={editProfileForm.village || ''} onChange={e => setEditProfileForm({...editProfileForm, village: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Pincode</label>
+                        <input type="text" value={editProfileForm.pincode || ''} onChange={e => setEditProfileForm({...editProfileForm, pincode: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-slate-700 mb-1">UPI ID (For Payments)</label>
+                        <input type="text" value={editProfileForm.upiId || ''} onChange={e => setEditProfileForm({...editProfileForm, upiId: e.target.value})} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:ring-2 focus:ring-emerald-500 outline-none" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-slate-700 mb-1">{editProfileForm.role === 'farmer' ? 'Farm Story & Details' : 'Delivery Address'}</label>
+                        <textarea rows="3" value={(editProfileForm.role === 'farmer' ? editProfileForm.farmStory : editProfileForm.deliveryAddress) || ''} onChange={e => editProfileForm.role === 'farmer' ? setEditProfileForm({...editProfileForm, farmStory: e.target.value}) : setEditProfileForm({...editProfileForm, deliveryAddress: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-6 animate-in fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+                    <div className="flex items-center gap-4">
+                      <img src={currentUser.avatar} alt={currentUser.name} className="w-20 h-20 rounded-full object-cover ring-4 ring-emerald-50 shadow-sm" />
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                          {currentUser.name}
+                          {currentUser.kycVerified && (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 uppercase tracking-wide">
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Verified
+                            </span>
+                          )}
+                        </h2>
+                        <p className="text-xs text-slate-500 uppercase font-bold mt-1 bg-slate-100 px-2.5 py-1 rounded-lg inline-block">{currentUser.role}</p>
+                      </div>
+                    </div>
+                    <button onClick={startEditingProfile} className="shrink-0 flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs transition-colors border border-emerald-200">
+                      <Edit3 className="w-4 h-4" /> Edit Profile
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <span className="flex items-center gap-1.5 text-slate-400 font-bold text-xs mb-1"><Phone className="w-3.5 h-3.5" /> Mobile Number</span>
+                      <span className="font-bold text-slate-800">{currentUser.phone}</span>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <span className="flex items-center gap-1.5 text-slate-400 font-bold text-xs mb-1"><MapPin className="w-3.5 h-3.5" /> Location</span>
+                      <span className="font-bold text-slate-800">{currentUser.village} {currentUser.pincode ? `(${currentUser.pincode})` : ''}</span>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <span className="flex items-center gap-1.5 text-slate-400 font-bold text-xs mb-1"><QrCode className="w-3.5 h-3.5" /> UPI ID</span>
+                      <span className="font-mono font-bold text-emerald-700">{currentUser.upiId || 'Not Setup'}</span>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <span className="flex items-center gap-1.5 text-slate-400 font-bold text-xs mb-1"><Info className="w-3.5 h-3.5" /> {currentUser.role === 'farmer' ? 'Farm Story' : 'Address'}</span>
+                      <span className="font-medium text-slate-700 text-xs">{(currentUser.role === 'farmer' ? currentUser.farmStory : currentUser.deliveryAddress) || 'No details added.'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                  <span className="text-slate-400 block mb-1">Mobile Number</span>
-                  <span className="font-bold text-slate-800">{currentUser.phone}</span>
-                </div>
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                  <span className="text-slate-400 block mb-1">Village / Location</span>
-                  <span className="font-bold text-slate-800">{currentUser.village} ({currentUser.pincode})</span>
-                </div>
+            {}
+            {!isEditingProfile && currentUser.role === 'farmer' && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                  <Sprout className="w-5 h-5 text-emerald-600" /> My Published Listings
+                </h3>
+                
+                {products.filter(p => p.farmerId === currentUser.id).length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-6 bg-slate-50 rounded-2xl border border-slate-100">You have no active listings.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {products.filter(p => p.farmerId === currentUser.id).map(product => (
+                      <div key={product.id} className="flex gap-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 relative group transition-all hover:bg-white hover:shadow-sm hover:border-emerald-300">
+                        <img src={product.image} alt={product.name} className="w-20 h-20 rounded-xl object-cover border border-slate-200" />
+                        <div className="flex-1 pr-8">
+                          <h4 className="font-bold text-slate-900 text-sm leading-tight mb-1">{product.name}</h4>
+                          <p className="text-xs text-slate-500 mb-0.5">Stock: <strong className="text-emerald-700">{product.quantity} kg</strong></p>
+                          <p className="text-xs text-slate-500">Price: <strong>₹{product.pricePerKg}/kg</strong></p>
+                          <span className="inline-block mt-1.5 bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">{product.harvestDate}</span>
+                        </div>
+                        <button
+                          onClick={() => setProductToDelete(product)}
+                          className="absolute top-3 right-3 p-2 bg-slate-200 hover:bg-red-100 text-slate-500 hover:text-red-600 rounded-lg transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shadow-sm"
+                          title="Delete Listing"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                <span className="text-slate-400 block mb-1">UPI Payout VPA ID</span>
-                <span className="font-mono font-bold text-emerald-700">{currentUser.upiId}</span>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
