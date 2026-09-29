@@ -1,8 +1,10 @@
-import { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Sprout,
   ShoppingBag,
+  Truck,
   CheckCircle2,
+  Clock,
   MapPin,
   Tag,
   ShieldCheck,
@@ -10,13 +12,21 @@ import {
   Lock,
   PlusCircle,
   Search,
+  Filter,
   X,
+  Edit3,
   Trash2,
+  Phone,
+  Building,
   RefreshCw,
+  Info,
   Calendar,
+  CreditCard,
+  QrCode,
   Globe,
   LogOut,
   LogIn,
+  UserPlus,
   ChevronRight,
   AlertCircle,
   Sparkles,
@@ -278,10 +288,10 @@ const INITIAL_ORDERS = [
 export default function App() {
   // Session & Authentication State
   const [lang, setLang] = useState('en');
-  const [currentUser, setCurrentUser] = useState(SEED_USERS[2]); // Default as Consumer Rahul
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authTab, setAuthTab] = useState('login'); // 'login' | 'signup'
+  // Initialize with no user and forced logout state
+  const [currentUser, setCurrentUser] = useState(null); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authTab, setAuthTab] = useState('signup'); // Default to 'signup'
 
   // Auth Form Input
   const [authForm, setAuthForm] = useState({
@@ -299,7 +309,7 @@ export default function App() {
   const [orders, setOrders] = useState(INITIAL_ORDERS);
   const [cart, setCart] = useState([]);
 
-  // Active Navigation View: 'marketplace' | 'farmer-hub' | 'orders' | 'profile' | 'prebooking'
+  // Active Navigation View
   const [activeTab, setActiveTab] = useState('marketplace');
 
   // Search & Filtering State
@@ -309,20 +319,22 @@ export default function App() {
 
   // Modals & UI States
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [transparentProduct, setTransparentProduct] = useState(null); // Price breakdown modal
-  const [productToDelete, setProductToDelete] = useState(null); // Confirm delete dialog
-  const [productToRestock, setProductToRestock] = useState(null); // Restock modal
-  const [isAddListingOpen, setIsAddListingOpen] = useState(false); // Add new crop modal
+  const [transparentProduct, setTransparentProduct] = useState(null); 
+  const [productToDelete, setProductToDelete] = useState(null); 
+  const [productToRestock, setProductToRestock] = useState(null); 
+  const [productToEdit, setProductToEdit] = useState(null); 
+  const [isAddListingOpen, setIsAddListingOpen] = useState(false); 
   const [toast, setToast] = useState(null);
 
   // Preferred quantity selector per product on marketplace cards
   const [preferredQuantities, setPreferredQuantities] = useState({});
 
   // Checkout Form State
+  const [checkoutStep, setCheckoutStep] = useState('cart'); 
   const [shippingForm, setShippingForm] = useState({
-    address: currentUser.deliveryAddress || '',
-    pincode: currentUser.pincode || '',
-    phone: currentUser.phone || '',
+    address: '',
+    pincode: '',
+    phone: '',
     paymentMethod: 'UPI'
   });
 
@@ -354,7 +366,6 @@ export default function App() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Distance calculation helper (Local <5km = ₹15, Intercity 5-20km = ₹30, Long distance >20km = ₹60)
   const calculateDeliveryCharge = (distanceKm) => {
     if (distanceKm <= 5) return 15;
     if (distanceKm <= 20) return 30;
@@ -383,11 +394,19 @@ export default function App() {
       const found = SEED_USERS.find(u => u.phone === authForm.phone || u.name.toLowerCase().includes(authForm.name.toLowerCase()));
       if (found) {
         setCurrentUser(found);
+        
+        // Setup initial shipping form info based on user
+        setShippingForm({
+          address: found.deliveryAddress || '',
+          pincode: found.pincode || '',
+          phone: found.phone || '',
+          paymentMethod: 'UPI'
+        });
+
         setIsLoggedIn(true);
-        setShowAuthModal(false);
         showToast(`Welcome back, ${found.name}! Logged in as ${found.role.toUpperCase()}.`);
       } else {
-        showToast('User not found. Please Sign Up for a new Crop Setu account.');
+        showToast('User not found. Please check your details or Sign Up.');
       }
     } else {
       if (!authForm.name || !authForm.phone) {
@@ -403,14 +422,29 @@ export default function App() {
         phone: authForm.phone,
         upiId: authForm.upiId || `${authForm.name.toLowerCase().replace(/\s+/g, '')}@upi`,
         kycVerified: authForm.kycVerified,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+        deliveryAddress: ''
       };
       SEED_USERS.push(newUser);
       setCurrentUser(newUser);
+
+      setShippingForm({
+        address: '',
+        pincode: newUser.pincode,
+        phone: newUser.phone,
+        paymentMethod: 'UPI'
+      });
+
       setIsLoggedIn(true);
-      setShowAuthModal(false);
       showToast(`Account created! Welcome to Crop Setu, ${newUser.name}.`);
     }
+  };
+
+  const handleLogOut = () => {
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    setCart([]); // clear cart on logout
+    showToast('You have successfully logged out.');
   };
 
   const handleAddToCart = (product, qty) => {
@@ -429,7 +463,6 @@ export default function App() {
       }
     });
 
-    // Quiet notification - does NOT force cart modal open!
     showToast(`Added ${qty} kg of ${product.name} to Cart!`);
   };
 
@@ -442,9 +475,7 @@ export default function App() {
 
     const price = Number(newCropForm.pricePerKg);
     const farmerShare = Math.round(price * 0.82);
-    const delFee = 2;
-    const platFee = 1;
-
+    
     const newProd = {
       id: `crop_${Date.now()}`,
       farmerId: currentUser.id,
@@ -456,8 +487,8 @@ export default function App() {
       image: newCropForm.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
       pricePerKg: price,
       farmerReceives: farmerShare,
-      deliveryFee: delFee,
-      platformFee: platFee,
+      deliveryFee: 2,
+      platformFee: 1,
       retailPrice: Math.round(price * 1.25),
       quantity: Number(newCropForm.quantity),
       unit: 'kg',
@@ -469,9 +500,8 @@ export default function App() {
 
     setProducts([newProd, ...products]);
     setIsAddListingOpen(false);
-    showToast(`Listing "${newProd.name}" created with seller photos!`);
+    showToast(`Listing "${newProd.name}" created!`);
     
-    // Reset form
     setNewCropForm({
       name: '',
       category: 'Vegetables',
@@ -539,7 +569,7 @@ export default function App() {
         pricePerKg: item.pricePerKg,
         totalAmount: item.cartQty * item.pricePerKg,
         deliveryFee,
-        statusStep: 1, // 1: Order Placed
+        statusStep: 1, 
         deliveryAddress: shippingForm.address || currentUser.deliveryAddress || 'Default Address',
         pincode: shippingForm.pincode || currentUser.pincode,
         phone: shippingForm.phone || currentUser.phone,
@@ -548,7 +578,6 @@ export default function App() {
       };
     });
 
-    // Deduct stock real-time
     setProducts(prevProducts => prevProducts.map(p => {
       const cartMatch = cart.find(c => c.id === p.id);
       if (cartMatch) {
@@ -560,6 +589,7 @@ export default function App() {
     setOrders([...newOrders, ...orders]);
     setCart([]);
     setIsCartOpen(false);
+    setCheckoutStep('cart');
     showToast(`Order placed successfully! Deal locked privately between buyer and farmer.`);
     setActiveTab('orders');
   };
@@ -577,11 +607,179 @@ export default function App() {
     });
   }, [products, searchQuery, selectedCategory, selectedDistanceFilter]);
 
-  // PRIVACY RULE: Orders are visible ONLY to the buyer or seller in the deal!
   const myVisibleOrders = useMemo(() => {
+    if (!currentUser) return [];
     return orders.filter(o => o.buyerId === currentUser.id || o.farmerId === currentUser.id);
   }, [orders, currentUser]);
 
+  // ==========================================
+  // FULL PAGE AUTHENTICATION SCREEN
+  // ==========================================
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-emerald-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+        
+        {/* Toast logic needed here as well since main app is unmounted */}
+        {toast && (
+          <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700 max-w-md animate-bounce">
+            <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
+            <p className="text-xs font-semibold">{toast}</p>
+          </div>
+        )}
+
+        {/* Decorative Background Circles */}
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-emerald-800 rounded-full blur-3xl opacity-30"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-teal-800 rounded-full blur-3xl opacity-30"></div>
+
+        <div className="relative z-10 w-full max-w-md flex flex-col items-center">
+          
+          {/* Logo & Intro */}
+          <div className="mb-8 text-center">
+            <div className="bg-emerald-500 p-4 rounded-3xl text-white shadow-xl inline-block mb-4 border-2 border-emerald-400">
+              <Sprout className="w-10 h-10 animate-pulse" />
+            </div>
+            <h1 className="text-4xl font-black tracking-tight text-white flex items-center justify-center gap-2 mb-2">
+              {t.appName} <span className="bg-emerald-700 text-emerald-100 text-xs px-2.5 py-1 rounded-full font-bold shadow-inner">F2C</span>
+            </h1>
+            <p className="text-emerald-200 font-medium text-sm">{t.tagline}</p>
+          </div>
+
+          {/* Language Selector */}
+          <div className="flex items-center gap-2 mb-6 bg-slate-900/50 backdrop-blur-sm p-1.5 rounded-2xl shadow-sm border border-emerald-800 w-full justify-center">
+              <Globe className="w-4 h-4 text-emerald-400 ml-2" />
+              {['en', 'hi', 'mr'].map(l => (
+                <button
+                  key={l}
+                  onClick={() => setLang(l)}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold uppercase transition-all ${
+                    lang === l ? 'bg-emerald-600 text-white shadow' : 'text-emerald-300 hover:bg-emerald-800/50'
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+          </div>
+
+          {/* Auth Card */}
+          <div className="bg-white rounded-[2rem] w-full p-8 shadow-2xl border border-slate-100 space-y-6">
+            <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl">
+              <button
+                onClick={() => setAuthTab('signup')}
+                className={`flex-1 font-bold text-sm py-2.5 rounded-xl transition-all ${
+                  authTab === 'signup' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t.signup}
+              </button>
+              <button
+                onClick={() => setAuthTab('login')}
+                className={`flex-1 font-bold text-sm py-2.5 rounded-xl transition-all ${
+                  authTab === 'login' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t.login}
+              </button>
+            </div>
+
+            <form onSubmit={handleAuthSubmit} className="space-y-4 text-sm">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramesh Patil"
+                    value={authForm.name}
+                    onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Mobile Number <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="+91 98220 11223"
+                    value={authForm.phone}
+                    onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {authTab === 'signup' && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">I am joining as a...</label>
+                    <select
+                      value={authForm.role}
+                      onChange={(e) => setAuthForm({ ...authForm, role: e.target.value })}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none font-medium"
+                    >
+                      <option value="consumer">Consumer / Buyer</option>
+                      <option value="farmer">Farmer / Producer</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">Location (Village / Pincode)</label>
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="e.g. Ahmednagar, 414001"
+                        value={authForm.village}
+                        onChange={(e) => setAuthForm({ ...authForm, village: e.target.value })}
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {authForm.role === 'farmer' && (
+                    <div className="flex items-start gap-2 pt-2 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+                      <input
+                        type="checkbox"
+                        id="kyc"
+                        checked={authForm.kycVerified}
+                        onChange={(e) => setAuthForm({ ...authForm, kycVerified: e.target.checked })}
+                        className="mt-1 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <label htmlFor="kyc" className="text-slate-700 text-xs font-semibold cursor-pointer leading-tight">
+                        Apply for <strong className="text-emerald-700">Verified Farmer Badge</strong> (KYC via Aadhaar)
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 mt-4"
+              >
+                {authTab === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                {authTab === 'login' ? 'Secure Log In' : 'Create My Account'}
+              </button>
+            </form>
+            
+            {authTab === 'login' && (
+               <p className="text-center text-xs text-slate-500 mt-4">
+                 Demo Hint: Login as <strong>Ramesh Patil</strong> (Farmer) or <strong>Rahul Sharma</strong> (Consumer).
+               </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // MAIN APPLICATION UI (ONLY WHEN LOGGED IN)
+  // ==========================================
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans pb-16">
       
@@ -589,7 +787,6 @@ export default function App() {
       <header className="bg-emerald-900 text-white sticky top-0 z-40 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
           
-          {/* Logo & Tagline */}
           <div className="flex items-center space-x-3">
             <div className="bg-emerald-500 p-2 rounded-2xl text-white shadow-inner">
               <Sprout className="w-6 h-6 animate-pulse" />
@@ -602,11 +799,9 @@ export default function App() {
             </div>
           </div>
 
-          {/* Language & Auth Persona Switcher */}
           <div className="flex items-center gap-2 sm:gap-3">
             
-            {/* Language Selector */}
-            <div className="flex items-center bg-emerald-800/80 rounded-xl p-1 border border-emerald-700 text-xs">
+            <div className="hidden sm:flex items-center bg-emerald-800/80 rounded-xl p-1 border border-emerald-700 text-xs">
               <Globe className="w-3.5 h-3.5 text-emerald-300 ml-1.5 mr-1" />
               {['en', 'hi', 'mr'].map(l => (
                 <button
@@ -622,44 +817,28 @@ export default function App() {
             </div>
 
             {/* Current Active Persona & Login Button */}
-            {isLoggedIn ? (
-              <div className="flex items-center bg-emerald-950 px-2.5 py-1 rounded-xl border border-emerald-700 text-xs gap-2">
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-400"
-                />
-                <div className="hidden md:block text-left">
-                  <span className="font-bold text-white block leading-tight">{currentUser.name}</span>
-                  <span className="text-[10px] text-emerald-300 uppercase font-semibold">{currentUser.role}</span>
-                </div>
-                <button
-                  onClick={() => {
-                    setIsLoggedIn(false);
-                    showToast('Logged out.');
-                  }}
-                  title="Log Out"
-                  className="text-emerald-400 hover:text-white p-1"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
+            <div className="flex items-center bg-emerald-950 px-2.5 py-1.5 rounded-xl border border-emerald-700 text-xs gap-3 shadow-inner">
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="w-7 h-7 rounded-full object-cover ring-2 ring-emerald-500"
+              />
+              <div className="hidden md:block text-left">
+                <span className="font-bold text-white block leading-tight text-sm">{currentUser.name}</span>
+                <span className="text-[10px] text-emerald-300 uppercase font-black tracking-wider">{currentUser.role}</span>
               </div>
-            ) : (
               <button
-                onClick={() => {
-                  setAuthTab('login');
-                  setShowAuthModal(true);
-                }}
-                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-xl shadow flex items-center gap-1"
+                onClick={handleLogOut}
+                title="Log Out"
+                className="bg-emerald-800 hover:bg-red-600 text-emerald-100 hover:text-white p-1.5 rounded-lg transition-colors ml-1"
               >
-                <LogIn className="w-3.5 h-3.5" /> {t.login}
+                <LogOut className="w-4 h-4" />
               </button>
-            )}
+            </div>
 
-            {/* Cart Button with Quantity Badge */}
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative bg-emerald-600 hover:bg-emerald-500 p-2 rounded-xl text-white shadow transition-all active:scale-95"
+              className="relative bg-emerald-600 hover:bg-emerald-500 p-2.5 rounded-xl text-white shadow transition-all active:scale-95"
             >
               <ShoppingBag className="w-5 h-5" />
               {cart.length > 0 && (
@@ -673,8 +852,8 @@ export default function App() {
       </header>
 
       {/* MAIN NAVIGATION BAR */}
-      <nav className="bg-white border-b border-slate-200 sticky top-14.25 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex space-x-2 sm:space-x-8 overflow-x-auto">
+      <nav className="bg-white border-b border-slate-200 sticky top-[69px] z-30 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex space-x-2 sm:space-x-8 overflow-x-auto hide-scrollbar">
           <button
             onClick={() => setActiveTab('marketplace')}
             className={`py-3 px-3 sm:px-1 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition-colors ${
@@ -686,7 +865,6 @@ export default function App() {
             <ShoppingBag className="w-4 h-4" /> {t.marketplace}
           </button>
 
-          {/* Farmer Hub Tab */}
           <button
             onClick={() => setActiveTab('farmer-hub')}
             className={`py-3 px-3 sm:px-1 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition-colors ${
@@ -698,7 +876,6 @@ export default function App() {
             <Sprout className="w-4 h-4 text-emerald-600" /> {t.farmerDashboard}
           </button>
 
-          {/* My Orders & Tracking Tab */}
           <button
             onClick={() => setActiveTab('orders')}
             className={`py-3 px-3 sm:px-1 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap transition-colors relative ${
@@ -740,7 +917,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* TOAST NOTIFICATION BANNER */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700 max-w-md animate-bounce">
           <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -755,7 +931,6 @@ export default function App() {
         {activeTab === 'marketplace' && (
           <div className="space-y-6">
             
-            {/* Search and Proximity Filters */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-3 items-center justify-between">
               
               <div className="relative w-full md:w-80">
@@ -769,7 +944,6 @@ export default function App() {
                 />
               </div>
 
-              {/* Category Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
                 {['All', 'Grains', 'Vegetables', 'Fruits', 'Pulses'].map(cat => (
                   <button
@@ -786,7 +960,6 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Distance Proximity Filter */}
               <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs w-full md:w-auto justify-end">
                 <MapPin className="w-3.5 h-3.5 text-emerald-600 ml-1" />
                 <span className="text-slate-500 font-medium">Distance:</span>
@@ -804,7 +977,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Produce Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProducts.map(product => {
                 const prefQty = preferredQuantities[product.id] || product.moq || 1;
@@ -814,7 +986,6 @@ export default function App() {
                 return (
                   <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
                     <div>
-                      {/* Image & Badges */}
                       <div className="relative h-48 bg-slate-100 overflow-hidden">
                         <img
                           src={product.image}
@@ -838,7 +1009,6 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Content */}
                       <div className="p-5">
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <h3 className="font-bold text-slate-900 text-base leading-snug">{product.name}</h3>
@@ -847,7 +1017,6 @@ export default function App() {
                           </span>
                         </div>
 
-                        {/* Farmer & Location Story */}
                         <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
                           <span className="flex items-center gap-1">
                             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -860,7 +1029,6 @@ export default function App() {
                           "{product.description}"
                         </p>
 
-                        {/* Price & Stock Stats */}
                         <div className="grid grid-cols-2 gap-2 text-xs bg-emerald-50/60 p-3 rounded-xl border border-emerald-100 mb-3">
                           <div>
                             <span className="text-slate-500 block text-[10px]">Price / kg</span>
@@ -873,7 +1041,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Transparent Price Breakdown Trigger Button */}
                         <button
                           onClick={() => setTransparentProduct(product)}
                           className="w-full text-left text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center justify-between bg-emerald-100/50 hover:bg-emerald-100 p-2 rounded-xl transition-colors mb-4"
@@ -887,7 +1054,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Quantity Selector & Add To Cart Footer */}
                     <div className="px-5 pb-5 pt-0 space-y-2">
                       {!isOutOfStock && (
                         <div className="flex items-center justify-between gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
@@ -921,7 +1087,6 @@ export default function App() {
                           <ShoppingBag className="w-4 h-4" /> {t.addToCart} ({prefQty}kg)
                         </button>
 
-                        {/* Owner Quick Edit/Restock Controls */}
                         {isOwner && (
                           <button
                             onClick={() => setProductToRestock(product)}
@@ -940,10 +1105,10 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: FARMER HUB / INVENTORY MANAGER */}
+        {/* TAB 2: FARMER HUB */}
         {activeTab === 'farmer-hub' && (
           <div className="space-y-6">
-            <div className="bg-linear-to-r from-emerald-900 to-teal-900 text-white p-6 rounded-3xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-6 rounded-3xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
               <div>
                 <span className="bg-emerald-500/30 text-emerald-300 text-xs px-3 py-1 rounded-full font-bold border border-emerald-400/30 uppercase tracking-wider">
                   Farmer Direct Portal
@@ -962,7 +1127,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Farmer Inventory Grid */}
             <div className="space-y-4">
               <h3 className="font-bold text-slate-900 text-lg">My Listed Crops & Inventory</h3>
 
@@ -992,7 +1156,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Controls */}
                       <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                         {isOwner ? (
                           <>
@@ -1022,7 +1185,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: ORDERS & LIVE TRACKING (PRIVACY ENFORCED) */}
+        {/* TAB 3: ORDERS */}
         {activeTab === 'orders' && (
           <div className="space-y-6">
             <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3">
@@ -1053,7 +1216,6 @@ export default function App() {
 
                   return (
                     <div key={order.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                      {/* Order Banner */}
                       <div className="bg-slate-900 text-white p-4 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <span className="bg-emerald-500 text-slate-950 font-mono text-xs px-2.5 py-1 rounded-lg font-bold">
@@ -1069,9 +1231,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Order Body */}
                       <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Product info */}
                         <div className="flex gap-4">
                           <img src={order.productImage} alt={order.productName} className="w-20 h-20 rounded-2xl object-cover border border-slate-200" />
                           <div>
@@ -1081,7 +1241,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Transacting Parties */}
                         <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs space-y-1.5">
                           <p className="font-bold text-slate-700 border-b border-slate-200 pb-1">Deal Participants</p>
                           <p><span className="text-slate-400">Farmer:</span> <strong>{order.farmerName}</strong></p>
@@ -1089,7 +1248,6 @@ export default function App() {
                           <p><span className="text-slate-400">Payment Method:</span> <strong>{order.paymentMethod}</strong></p>
                         </div>
 
-                        {/* Status Stepper Controls */}
                         <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100 flex flex-col justify-between">
                           <div>
                             <p className="text-xs font-bold text-emerald-900 mb-2">Live Order Progress</p>
@@ -1107,7 +1265,6 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Farmer Advancement Action */}
                           {isFarmerInDeal && order.statusStep < 6 && (
                             <button
                               onClick={() => {
@@ -1143,7 +1300,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: PROFILE & KYC */}
+        {/* TAB 5: PROFILE */}
         {activeTab === 'profile' && (
           <div className="max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center gap-4 border-b border-slate-200 pb-5">
@@ -1183,112 +1340,8 @@ export default function App() {
 
       </main>
 
-      {/* AUTHENTICATION MODAL (LOGIN / SIGN UP) */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200">
-            
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setAuthTab('login')}
-                  className={`font-bold text-sm px-3 py-1 rounded-xl ${
-                    authTab === 'login' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-100'
-                  }`}
-                >
-                  Log In
-                </button>
-                <button
-                  onClick={() => setAuthTab('signup')}
-                  className={`font-bold text-sm px-3 py-1 rounded-xl ${
-                    authTab === 'signup' ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-100'
-                  }`}
-                >
-                  Sign Up
-                </button>
-              </div>
-              <button onClick={() => setShowAuthModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAuthSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ramesh Patil"
-                  value={authForm.name}
-                  onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Mobile Number (OTP Verification) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="+91 98220 11223"
-                  value={authForm.phone}
-                  onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              {authTab === 'signup' && (
-                <>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Select Role</label>
-                    <select
-                      value={authForm.role}
-                      onChange={(e) => setAuthForm({ ...authForm, role: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                    >
-                      <option value="consumer">Consumer / Buyer</option>
-                      <option value="farmer">Farmer / Producer</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Village / District & Pincode</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Ahmednagar, 414001"
-                      value={authForm.village}
-                      onChange={(e) => setAuthForm({ ...authForm, village: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="checkbox"
-                      id="kyc"
-                      checked={authForm.kycVerified}
-                      onChange={(e) => setAuthForm({ ...authForm, kycVerified: e.target.checked })}
-                      className="rounded text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <label htmlFor="kyc" className="text-slate-600 font-semibold cursor-pointer">
-                      Verify Aadhaar KYC for Verified Farmer Badge
-                    </label>
-                  </div>
-                </>
-              )}
-
-              <button
-                type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow transition-colors"
-              >
-                {authTab === 'login' ? 'Authenticate & Log In' : 'Complete Registration'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* TRANSPARENT PRICING BREAKDOWN MODAL */}
+      {/* MODALS FOR LOGGED IN STATE */}
+      
       {transparentProduct && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -1340,7 +1393,6 @@ export default function App() {
         </div>
       )}
 
-      {/* RESTOCK MODAL WITH HARVEST DATES */}
       {productToRestock && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -1414,7 +1466,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ADD NEW CROP LISTING MODAL WITH IMAGE UPLOAD */}
       {isAddListingOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1483,7 +1534,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Direct Photo Upload */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Upload Farm Photo (Seller Image)</label>
                 <div
@@ -1527,7 +1577,6 @@ export default function App() {
         </div>
       )}
 
-      {/* SHOPPING CART & CHECKOUT DRAWER */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-end">
           <div className="bg-white max-w-md w-full h-full p-6 shadow-2xl flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-200">
@@ -1558,7 +1607,6 @@ export default function App() {
                     </div>
                   ))}
 
-                  {/* Checkout Address Input */}
                   <div className="pt-4 border-t border-slate-200 space-y-3 text-xs">
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">Delivery Address</label>
@@ -1609,7 +1657,6 @@ export default function App() {
         </div>
       )}
 
-      {/* DELETE CONFIRMATION DIALOG */}
       {productToDelete && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
